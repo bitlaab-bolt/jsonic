@@ -14,4 +14,4 @@ Jsonic has no external dependencies.
 
 ## Documentation
 
-For most up-to-date documentation see - [**Wevi Documentation**](https://bitlaabbolt.web.app/).
+For most up-to-date documentation see - [**Jsonic Documentation**](https://bitlaabbolt.web.app/).
