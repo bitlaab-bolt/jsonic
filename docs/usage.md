@@ -9,10 +9,14 @@ const jsonic = @import("jsonic");
 ## Static JSON
 
 ```zig
+var gpa_mem = std.heap.GeneralPurposeAllocator(.{}){};
+defer std.debug.assert(gpa_mem.deinit() == .ok);
+const heap = gpa_mem.allocator();
+
 const static_input = "{ \"name\": \"John Doe\", \"age\": 40 }";
 const User = struct { name: []const u8, age: u8 };
 
-const data = try jsonic.Static.parse(User, heap, static_input);
+const data = try jsonic.StaticJson.parse(User, heap, static_input);
 std.debug.print(
     "Static Data [ name: {s}, age: {d} ]\n", .{data.name, data.age}
 );
@@ -29,7 +33,7 @@ const heap = gpa_mem.allocator();
 
 const input = "[\"John Doe\", 40]";
 
-var dyn_json = try parser.Dynamic.init(heap, input, .{});
+var dyn_json = try jsonic.DynamicJson.init(heap, input, .{});
 defer dyn_json.deinit();
 
 const json_data = dyn_json.data().array;
@@ -56,7 +60,7 @@ const input =
 \\ }
 ;
 
-var dyn_json = try parser.Dynamic.init(heap, input, .{});
+var dyn_json = try jsonic.DynamicJson.init(heap, input, .{});
 defer dyn_json.deinit();
 
 const json_data = dyn_json.data().object;
