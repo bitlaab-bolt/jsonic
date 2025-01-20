@@ -5,7 +5,7 @@ This project adheres to the [Semantic Version](https://semver.org/) guideline.
 
 ## [v0.1.0] - 2024-12-23
 
-Supports static and dynamic JSON data parsing.
+Supports static and dynamic JSON data parsing and stringification.
 
 ### Added
 
