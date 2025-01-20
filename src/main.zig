@@ -1,11 +1,12 @@
 const std = @import("std");
+const debug = std.debug;
 
 const parser = @import("./core/parser.zig");
 
 
 pub fn main() !void {
     var gpa_mem = std.heap.GeneralPurposeAllocator(.{}){};
-    defer std.debug.assert(gpa_mem.deinit() == .ok);
+    defer debug.assert(gpa_mem.deinit() == .ok);
     const heap = gpa_mem.allocator();
 
     // Static JSON
@@ -13,9 +14,14 @@ pub fn main() !void {
     const User = struct { name: []const u8, age: u8 };
 
     const data = try parser.Static.parse(User, heap, static_input);
-    std.debug.print(
+    debug.print(
         "Static Data [ name: {s}, age: {d} ]\n", .{data.name, data.age}
     );
+
+    const out = try parser.Static.stringify(heap, data);
+    defer heap.free(out);
+
+    debug.print("{s}\n", .{out});
 
     // Dynamic JSON with object data
     const input2 =

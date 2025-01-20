@@ -9,6 +9,15 @@ pub const Static = struct {
         defer parsed.deinit();
         return parsed.value;
     }
+
+    /// **WARNING:** Return value must be deallocated!
+    pub fn stringify(heap: Allocator, value: anytype) ![]u8 {
+        const out = try json.stringifyAlloc(
+            heap, value, .{.whitespace = .minified}
+        );
+
+        return out;
+    }
 };
 
 pub const Dynamic = struct {

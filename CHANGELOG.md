@@ -9,5 +9,6 @@ Supports static and dynamic JSON data parsing.
 
 ### Added
 
+- Static data stringification
 - Static data parsing
 - Dynamic data parsing

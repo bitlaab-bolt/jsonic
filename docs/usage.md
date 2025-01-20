@@ -20,6 +20,11 @@ const data = try jsonic.StaticJson.parse(User, heap, static_input);
 std.debug.print(
     "Static Data [ name: {s}, age: {d} ]\n", .{data.name, data.age}
 );
+
+const out = try parser.Static.stringify(heap, data);
+defer heap.free(out);
+
+std.debug.print("{s}\n", .{out});
 ```
 
 ## Dynamic JSON
