@@ -2,7 +2,7 @@
 
 **JSON data parser and stringifier**
 
-Jsonic is intended to be a high-level abstraction for JSON data parsing and stringification. Jsonic is just a wrapper on top of Zigs `std.json` module.
+Jsonic is intended to be a high-level abstraction for JSON data parsing and stringification. Jsonic is just a wrapper on top of Zigs `std.json` module. Along with some compile time type checks and code generation.
 
 ## Platform Support
 

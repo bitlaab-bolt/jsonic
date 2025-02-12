@@ -1,14 +1,12 @@
 const std = @import("std");
 const json = std.json;
-const builtin = std.builtin;
 const Allocator = std.mem.Allocator;
-const StructField = builtin.Type.StructField;
-
-
-const Error = std.mem.Allocator.Error;
+const StructField = std.builtin.Type.StructField;
 
 
 pub const Static = struct {
+    /// # Parses JSON String into a Given Structure
+    /// **WARNING:** You must call `free()` on parsed result
     pub fn parse(comptime T: type, heap: Allocator, data: []const u8) !T {
         const parsed = try json.parseFromSlice(T, heap, data, .{});
         defer parsed.deinit();
@@ -16,11 +14,8 @@ pub const Static = struct {
         return try deepCopy(heap, parsed.value);
     }
 
-    // pub fn free(heap: Allocator, result: anytype) !void {
-    //     try deepFree(heap, result);
-    // }
-
-    /// **WARNING:** Return value must be deallocated!
+    /// # Stringifies a Given Structure into JSON String
+    /// **WARNING:** Return value must be deallocated by the caller
     pub fn stringify(heap: Allocator, value: anytype) ![]u8 {
         const out = try json.stringifyAlloc(
             heap, value, .{.whitespace = .minified}
@@ -30,40 +25,41 @@ pub const Static = struct {
     }
 };
 
-// fn deepFree(heap: Allocator, src: anytype) !void {
-//     switch (@typeInfo(@TypeOf(src))) {
-//         .@"struct" => |s| {
-//             inline for (s.fields) |field| {
-//                 try freeFieldValue(heap, src, field.type, field.name);
-//             }
-//         },
-//         else => @compileError("Unsupported Type")
-//     }
-// }
+pub const Dynamic = struct {
+    parsed: json.Parsed(json.Value),
 
-// fn freeFieldValue(
-//     heap: Allocator,
-//     src: anytype,
-//     comptime T: type,
-//     comptime tag: []const u8
-// ) !void {
-//     const value = @field(src, tag);
+    const Option = json.ParseOptions;
 
-//     switch (@typeInfo(T)) {
-//         .@"struct" => |_| {
-//             deepFree(heap, value);
-//         },
-//         .pointer => |_| {
-//             heap.free(value);
-//         },
-//         .optional => |o| {
-//             if (value != null) freeFieldValue(heap, src, o.child, tag);
-//         },
-//         else => {} // NOP
-//     }
-// }
+    /// # Initializes Dynamic JSON Value Instance
+    pub fn init(heap: Allocator, src: []const u8, option: Option) !Dynamic {
+        const parsed = try json.parseFromSlice(json.Value, heap, src, option);
+        return .{.parsed = parsed};
+    }
 
-fn deepCopy(heap: Allocator, src: anytype) Error!@TypeOf(src) {
+    /// # Destroys Dynamic JSON Value Instance
+    pub fn deinit(self: *Dynamic) void { self.parsed.deinit(); }
+
+    /// # Returns Parsed JSON Value
+    pub fn data(self: *Dynamic) json.Value {
+        return self.parsed.value;
+    }
+
+    /// # Parses Dynamic JSON Value into a Given Structure
+    /// **WARNING:** You must call `free()` on parsed result
+    pub fn parseInto(comptime T: type, heap: Allocator, src: json.Value) !T {
+        const parsed = try json.parseFromValue(T, heap, src, .{});
+        defer parsed.deinit();
+
+        return try deepCopy(heap, parsed.value);
+    }
+};
+
+/// # Releases underlying heap allocated memories
+pub fn free(heap: Allocator, result: anytype) !void {
+    try deepFree(heap, result);
+}
+
+fn deepCopy(heap: Allocator, src: anytype) !@TypeOf(src) {
     var dest: @TypeOf(src) = undefined;
 
     switch (@typeInfo(@TypeOf(src))) {
@@ -93,7 +89,7 @@ fn deepCopy(heap: Allocator, src: anytype) Error!@TypeOf(src) {
     return dest;
 }
 
-fn copyFieldValue(heap: Allocator, comptime T: type, value: T) Error!T {
+fn copyFieldValue(heap: Allocator, comptime T: type, value: T) !T {
     switch (@typeInfo(T)) {
         .bool => return value,
         .int => |n| {
@@ -115,25 +111,34 @@ fn copyFieldValue(heap: Allocator, comptime T: type, value: T) Error!T {
     }
 }
 
+fn deepFree(heap: Allocator, src: anytype) !void {
+    switch (@typeInfo(@TypeOf(src))) {
+        .@"struct" => |s| {
+            inline for (s.fields) |field| {
+                const value = @field(src, field.name);
+                try freeFieldValue(heap, @TypeOf(value), value);
+            }
+        },
+        .pointer => {
+            var i: usize = 0;
+            while (i < src.len) : (i += 1) {
+                const value = src[i];
+                try freeFieldValue(heap, @TypeOf(value), value);
+            }
 
-
-
-
-pub const Dynamic = struct {
-    parsed: json.Parsed(json.Value),
-
-    const Option = json.ParseOptions;
-
-    pub fn init(heap: Allocator, src: []const u8, option: Option) !Dynamic {
-        const parsed = try json.parseFromSlice(json.Value, heap, src, option);
-        return .{.parsed = parsed};
+            heap.free(src);
+        },
+        else => {} // NOP
     }
+}
 
-    pub fn deinit(self: *Dynamic) void {
-        self.parsed.deinit();
+fn freeFieldValue(heap: Allocator, comptime T: type, value: T) !void {
+    switch (@typeInfo(T)) {
+        .@"struct" => return try deepFree(heap, value),
+        .pointer => return try deepFree(heap, value),
+        .optional => |o| {
+            if (value != null) try freeFieldValue(heap, o.child, value.?);
+        },
+        else => {} // NOP
     }
-
-    pub fn data(self: *Dynamic) json.Value {
-        return self.parsed.value;
-    }
-};
+}

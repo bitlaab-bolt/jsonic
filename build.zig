@@ -14,7 +14,6 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize
     });
-    _ = pkg;
 
     // Making executable for this project
     const exe = b.addExecutable(.{
@@ -23,6 +22,9 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+
+    // Self importing package
+    exe.root_module.addImport("jsonic", pkg);
 
     b.installArtifact(exe);
 
