@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 This project adheres to the [Semantic Version](https://semver.org/) guideline.
 
+## [v0.2.5] - 2025-03-01
+
+Better error messages and Documentation
+
+### Added
+
+- Detailed error messages and documentation
+
 ## [v0.2.0] - 2025-02-12
 
 Supports automatic deep copy for parsed structure.

@@ -16,14 +16,19 @@ const heap = gpa_mem.allocator();
 
 ## Supported Data Type
 
-To parse a JSON string into a Zig struct, only use following data types:
+Zig's `std.json` supports variety of Zig types. But keep in mind though, JavaScript numbers are **IEEE 754** double-precision floating-point values, which means they use **64 bits** for representation. However, only **53 bits** are used for the integer part. The largest integer that can be represented without loss of precision is: `2^53 - 1 = 9,007,199,254,740,991`. At `2^53 + 1`, the number exceeds the 53-bit precision, causing rounding errors.
+
+Please be mindful when handling JSON input from different sources. Use following data types for consistency when appropriate:
 
 - `[]const u8` - For representing text data
 - `i64` - For representing integer number
 - `f64` - For representing floating point number
 - `bool` - For representing boolean value
 - `T` or `[]const T` - For representing user defined type
-- `?T` or `?[]const T` - For representing optional user defined type
+
+Above types could also be represented as an optional type.
+
+**Remarks:** `std.json` serializes Zig's `enum` variants into string representation. You have to manually deserialize them either in runtime or comptime.
 
 ## Static JSON
 

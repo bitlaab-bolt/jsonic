@@ -1,4 +1,5 @@
 const std = @import("std");
+const fmt = std.fmt;
 const json = std.json;
 const Allocator = std.mem.Allocator;
 const StructField = std.builtin.Type.StructField;
@@ -6,7 +7,7 @@ const StructField = std.builtin.Type.StructField;
 
 pub const Static = struct {
     /// # Parses JSON String into a Given Structure
-    /// **WARNING:** You must call `free()` on parsed result
+    /// **WARNING:** You must call `jsonic.free()` on parsed result
     pub fn parse(comptime T: type, heap: Allocator, data: []const u8) !T {
         const parsed = try json.parseFromSlice(T, heap, data, .{});
         defer parsed.deinit();
@@ -45,7 +46,7 @@ pub const Dynamic = struct {
     }
 
     /// # Parses Dynamic JSON Value into a Given Structure
-    /// **WARNING:** You must call `free()` on parsed result
+    /// **WARNING:** You must call `jsonic.free()` on parsed result
     pub fn parseInto(comptime T: type, heap: Allocator, src: json.Value) !T {
         const parsed = try json.parseFromValue(T, heap, src, .{});
         defer parsed.deinit();
@@ -81,9 +82,17 @@ fn deepCopy(heap: Allocator, src: anytype) !@TypeOf(src) {
                 }
 
                 dest = slice;
-            } else @compileError("Only Use `[]const T` Instead");
+            } else {
+                const t_name = @typeName(p.child);
+                const err_str = "Jsonic: Use `[]const {s}` Instead";
+                @compileError(fmt.comptimePrint(err_str, .{t_name}));
+            }
         },
-        else => @compileError("Unsupported Type")
+        else => {
+            const t_name = @typeName(@TypeOf(src));
+            const err_str = "Jsonic: Unsupported Type `{s}`";
+            @compileError(fmt.comptimePrint(err_str, .{t_name}));
+        }
     }
 
     return dest;
@@ -91,15 +100,10 @@ fn deepCopy(heap: Allocator, src: anytype) !@TypeOf(src) {
 
 fn copyFieldValue(heap: Allocator, comptime T: type, value: T) !T {
     switch (@typeInfo(T)) {
-        .bool => return value,
-        .int => |n| {
-            if (n.signedness == .unsigned and n.bits == 8) return value 
-            else if (n.signedness == .signed and n.bits == 64) return value
-            else @compileError("Only Use `u8` or `i64` Instead");
-        },
+        .bool, .int => return value,
         .float => |f| {
             if (f.bits == 64) return value
-            else @compileError("Only Use `f64` Instead");
+            else @compileError("Jsonic: Use `f64` Instead");
         },
         .@"struct" => return try deepCopy(heap, value),
         .pointer => return try deepCopy(heap, value),
@@ -107,7 +111,10 @@ fn copyFieldValue(heap: Allocator, comptime T: type, value: T) !T {
             if (value == null) return value
             else return try copyFieldValue(heap, o.child, value.?);
         },
-        else => @compileError("Unsupported Field Type")
+        else => {
+            const err_str = "Jsonic: Unsupported Field Type `{s}`";
+            @compileError(fmt.comptimePrint(err_str, .{@typeName(T)}));
+        }
     }
 }
 
