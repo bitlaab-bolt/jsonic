@@ -2,7 +2,6 @@ const std = @import("std");
 const fmt = std.fmt;
 const json = std.json;
 const Allocator = std.mem.Allocator;
-const StructField = std.builtin.Type.StructField;
 
 
 pub const Static = struct {
@@ -84,7 +83,7 @@ fn deepCopy(heap: Allocator, src: anytype) !@TypeOf(src) {
                 dest = slice;
             } else {
                 const t_name = @typeName(p.child);
-                const err_str = "Jsonic: Use `[]const {s}` Instead";
+                const err_str = "jsonic: Use `[]const {s}` Instead";
                 @compileError(fmt.comptimePrint(err_str, .{t_name}));
             }
         },
@@ -103,7 +102,7 @@ fn copyFieldValue(heap: Allocator, comptime T: type, value: T) !T {
         .bool, .int => return value,
         .float => |f| {
             if (f.bits == 64) return value
-            else @compileError("Jsonic: Use `f64` Instead");
+            else @compileError("jsonic: Use `f64` Instead");
         },
         .@"struct" => return try deepCopy(heap, value),
         .pointer => return try deepCopy(heap, value),
@@ -112,7 +111,7 @@ fn copyFieldValue(heap: Allocator, comptime T: type, value: T) !T {
             else return try copyFieldValue(heap, o.child, value.?);
         },
         else => {
-            const err_str = "Jsonic: Unsupported Field Type `{s}`";
+            const err_str = "jsonic: Unsupported Field Type `{s}`";
             @compileError(fmt.comptimePrint(err_str, .{@typeName(T)}));
         }
     }

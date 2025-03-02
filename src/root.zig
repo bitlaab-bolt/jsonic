@@ -1,4 +1,4 @@
-//! # JSON data parser
+//! # JSON Data Parser and Stringifier
 //! - See documentation at - https://bitlaabjsonic.web.app/
 
 const parser = @import("./core/parser.zig");

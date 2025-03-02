@@ -22,7 +22,7 @@ zig fetch --save \
 https://github.com/bitlaab-bolt/jsonic/archive/refs/tags/"your-version".zip
 ```
 
-Add jsonic as dependency to your project by coping following code on your project.
+Add jsonic as external package module to your project by coping following code on your project.
 
 ```zig title="build.zig"
 const jsonic = b.dependency("jsonic", .{});

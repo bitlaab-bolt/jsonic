@@ -6,7 +6,7 @@ First import Jsonic on your zig file.
 const jsonic = @import("jsonic");
 ```
 
-Initiate a General Propose Allocator (GPA) on main function.
+Initiate a General Propose Allocator (GPA) on the main function.
 
 ```zig
 var gpa_mem = std.heap.GeneralPurposeAllocator(.{}){};
@@ -28,7 +28,7 @@ Please be mindful when handling JSON input from different sources. Use following
 
 Above types could also be represented as an optional type.
 
-**Remarks:** `std.json` serializes Zig's `enum` variants into string representation. You have to manually deserialize them either in runtime or comptime.
+**Remarks:** `std.json` serializes Zig's `enum` variants into string representation. You have to manually deserialize them either in runtime or at compile time.
 
 ## Static JSON
 
