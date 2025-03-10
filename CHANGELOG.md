@@ -3,6 +3,15 @@
 All notable changes to this project will be documented in this file.
 This project adheres to the [Semantic Version](https://semver.org/) guideline.
 
+## [v0.3.1] - 2025-03-10
+
+Adding API Documentation
+
+### Added
+
+- API Reference
+- Minimum Zig version requirement - 0.15.0-dev.14
+
 ## [v0.3.0] - 2025-03-03
 
 Ready for production use

@@ -1,9 +1,10 @@
-site_name: jsonic v0.3.0
-site_url: https://mydomain.org/jsonic
+site_name: jsonic v0.3.1
+site_url: http://127.0.0.1
 nav:
   - Getting Started: index.md
   - How to Install: installation.md
   - How to Use: usage.md
+  - API Reference: reference.md
   - Developer Guide: guide.md
 markdown_extensions:
   - pymdownx.highlight:
