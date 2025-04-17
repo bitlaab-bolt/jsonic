@@ -6,6 +6,14 @@ First, import Jsonic into your Zig source file.
 const jsonic = @import("jsonic");
 ```
 
+Now, add following code into your `main` function.
+
+```zig
+var gpa_mem = std.heap.DebugAllocator(.{}).init;
+defer std.debug.assert(gpa_mem.deinit() == .ok);
+const heap = gpa_mem.allocator();
+```
+
 ## Supported Data Type
 
 Zig's `std.json` supports variety of data types. But keep in mind though, JavaScript numbers are **IEEE 754** double-precision floating-point values, which means they use **64 bits** for representation. However, only **53 bits** are used for the integer part. The largest integer that can be represented without loss of precision is: `2^53 - 1 = 9,007,199,254,740,991`. At `2^53 + 1`, the number exceeds the 53-bit precision, causing rounding errors.
@@ -119,7 +127,6 @@ std.debug.print("Hobby: {s}\n\n", .{hobby});
 ```
 
 ### Convert Object Value Into a Struct
-
 
 ```zig
 const Feelings = struct { fear: i64, joy: i64 };
