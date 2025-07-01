@@ -1,6 +1,7 @@
 const std = @import("std");
 const fmt = std.fmt;
 const json = std.json;
+const Parsed = json.Parsed;
 const Allocator = std.mem.Allocator;
 
 
@@ -8,7 +9,7 @@ pub const Static = struct {
     /// # Parses JSON String into a Given Structure
     /// **WARNING:** You must call `jsonic.free()` on parsed result.
     pub fn parse(comptime T: type, heap: Allocator, data: []const u8) !T {
-        const parsed = try json.parseFromSlice(T, heap, data, .{});
+        const parsed: Parsed(T) = try json.parseFromSlice(T, heap, data, .{});
         defer parsed.deinit();
 
         return try deepCopy(heap, parsed.value);
