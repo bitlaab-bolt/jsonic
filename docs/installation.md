@@ -28,6 +28,7 @@ Now, import **jsonic** as external package module to your project by coping foll
 
 ```zig title="build.zig"
 const jsonic = b.dependency("jsonic", .{});
+pkg.addImport("jsonic", jsonic.module("jsonic"));
 exe.root_module.addImport("jsonic", jsonic.module("jsonic"));
 lib.root_module.addImport("jsonic", jsonic.module("jsonic"));
 ```

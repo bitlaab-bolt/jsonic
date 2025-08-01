@@ -88,7 +88,7 @@ var dyn_json = try jsonic.DynamicJson.init(heap, src, .{});
 defer dyn_json.deinit();
 
 const value = dyn_json.data();
-const result = try jsonic.DynamicJson.parseInto(SliceType, heap, value);
+const result = try jsonic.DynamicJson.parseInto(SliceType, heap, value, .{});
 const str = try jsonic.StaticJson.stringify(heap, result);
 defer heap.free(str);
 
@@ -158,7 +158,7 @@ var json_value = try jsonic.DynamicJson.init(heap, static_input, .{});
 defer json_value.deinit();
 
 const src = json_value.data();
-const result = try jsonic.DynamicJson.parseInto(User, heap, src);
+const result = try jsonic.DynamicJson.parseInto(User, heap, src, .{});
 const str = try jsonic.StaticJson.stringify(heap, result);
 defer heap.free(str);
 

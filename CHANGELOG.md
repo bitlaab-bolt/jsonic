@@ -22,6 +22,17 @@ Here we write upgrading notes and make them as straightforward as possible.
 - A short description for fixed item 2
 - A short description for fixed item n
 
+## [v1.1.0] - 2025-08-02
+
+Some minor improvement and api breaking changes.
+
+### Added
+
+- Option field on `parseInto()`
+
+### Changed
+
+- `self` to constant pointer
 
 ## [v1.0.0] - 2025-07-28
 

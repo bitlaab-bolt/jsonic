@@ -32,8 +32,8 @@ pub const Dynamic = struct {
     parsed: json.Parsed(json.Value),
 
     /// # Initializes Dynamic JSON
-    pub fn init(heap: Allocator, src: []const u8, option: Option) !Dynamic {
-        const parsed = try json.parseFromSlice(json.Value, heap, src, option);
+    pub fn init(heap: Allocator, src: []const u8, opt: Option) !Dynamic {
+        const parsed = try json.parseFromSlice(json.Value, heap, src, opt);
         return .{.parsed = parsed};
     }
 
@@ -41,14 +41,19 @@ pub const Dynamic = struct {
     pub fn deinit(self: *Dynamic) void { self.parsed.deinit(); }
 
     /// # Returns Parsed JSON `Value`
-    pub fn data(self: *Dynamic) json.Value {
+    pub fn data(self: *const Dynamic) json.Value {
         return self.parsed.value;
     }
 
     /// # Parses Dynamic JSON Value into a Given Structure
     /// **WARNING:** You must call `jsonic.free()` on parsed result.
-    pub fn parseInto(comptime T: type, heap: Allocator, src: json.Value) !T {
-        const parsed = try json.parseFromValue(T, heap, src, .{});
+    pub fn parseInto(
+        comptime T: type,
+        heap: Allocator,
+        src: json.Value,
+        opt: Option
+    ) !T {
+        const parsed = try json.parseFromValue(T, heap, src, opt);
         defer parsed.deinit();
 
         return try deepCopy(heap, parsed.value);
