@@ -24,7 +24,7 @@ Here we write upgrading notes and make them as straightforward as possible.
 
 ## [v1.1.0] - 2025-08-02
 
-Some minor improvement and api breaking changes.
+Some minor improvements and breaking changes.
 
 ### Added
 
