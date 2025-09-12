@@ -1,4 +1,5 @@
 const std = @import("std");
+const Io = std.Io;
 const fmt = std.fmt;
 const json = std.json;
 const Parsed = json.Parsed;
@@ -18,11 +19,17 @@ pub const Static = struct {
     /// # Stringifies a Given Structure into JSON String
     /// **WARNING:** Return value must be freed by the caller.
     pub fn stringify(heap: Allocator, value: anytype) ![]u8 {
-        const out = try json.stringifyAlloc(
-            heap, value, .{.whitespace = .minified}
-        );
+        var out = Io.Writer.Allocating.init(heap);
+        errdefer out.deinit();
 
-        return out;
+        var stringify_json = json.Stringify {
+            .writer = &out.writer, .options = .{
+                .whitespace = .minified
+            }
+        };
+
+        try stringify_json.write(value);
+        return try out.toOwnedSlice();
     }
 };
 
@@ -106,7 +113,7 @@ fn deepCopy(heap: Allocator, src: anytype) !@TypeOf(src) {
 
 fn copyFieldValue(heap: Allocator, comptime T: type, value: T) !T {
     switch (@typeInfo(T)) {
-        .bool, .int => return value,
+        .bool, .int, .@"enum" => return value,
         .float => |f| {
             if (f.bits == 64) return value
             else @compileError("jsonic: Use `f64` Instead");

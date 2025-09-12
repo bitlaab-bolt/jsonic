@@ -20,18 +20,6 @@ Zig's `std.json` supports variety of data types. But keep in mind though, JavaSc
 
 Please be mindful when handling JSON input from external sources.
 
-Use following data types for consistency when appropriate:
-
-- `[]const u8` - For representing text data
-- `i64` - For representing integer number
-- `f64` - For representing floating point number
-- `bool` - For representing boolean value
-- `T` or `[]const T` - For representing user defined type
-
-Above types could also be represented as an optional (`?T`) type.
-
-**Remarks:** `std.json` serializes Zig's `enum` variants into string representation. You have to manually deserialize them either in runtime or at compile time.
-
 ## Static JSON
 
 ```zig
@@ -92,7 +80,7 @@ const result = try jsonic.DynamicJson.parseInto(SliceType, heap, value, .{});
 const str = try jsonic.StaticJson.stringify(heap, result);
 defer heap.free(str);
 
-debug.print("Stringify Result:\n{s}\n", .{str});
+std.debug.print("Stringify Result:\n{s}\n", .{str});
 try jsonic.free(heap, result);
 ```
 
@@ -112,7 +100,7 @@ const static_str =
 ;
 
 const static_input = try heap.alloc(u8, static_str.len);
-mem.copyForwards(u8, static_input, static_str);
+std.mem.copyForwards(u8, static_input, static_str);
 defer heap.free(static_input);
 
 var json_value = try jsonic.DynamicJson.init(heap, static_input, .{});
@@ -129,11 +117,11 @@ std.debug.print("Hobby: {s}\n\n", .{hobby});
 ### Convert Object Value Into a Struct
 
 ```zig
-const Feelings = struct { fear: i64, joy: i64 };
+const Feelings = struct { fear: f64, joy: i32 };
 
 const User = struct {
     name: []const u8,
-    age: i64,
+    age: u8,
     hobby: []const[]const u8,
     feelings: Feelings,
 };
@@ -144,14 +132,14 @@ const static_str =
 \\      "age": 30,
 \\      "hobby": ["reading", "fishing"],
 \\      "feelings": {
-\\          "fear": 75,
-\\          "joy": 25
+\\          "fear": 75.50,
+\\          "joy": -25
 \\      }
 \\ }
 ;
 
 const static_input = try heap.alloc(u8, static_str.len);
-mem.copyForwards(u8, static_input, static_str);
+std.mem.copyForwards(u8, static_input, static_str);
 defer heap.free(static_input);
 
 var json_value = try jsonic.DynamicJson.init(heap, static_input, .{});
@@ -162,6 +150,6 @@ const result = try jsonic.DynamicJson.parseInto(User, heap, src, .{});
 const str = try jsonic.StaticJson.stringify(heap, result);
 defer heap.free(str);
 
-debug.print("Stringify Result:\n{s}\n", .{str});
+std.debug.print("Stringify Result:\n{s}\n", .{str});
 try jsonic.free(heap, result);
 ```
