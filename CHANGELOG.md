@@ -22,6 +22,15 @@ Here we write upgrading notes and make them as straightforward as possible.
 - A short description for fixed item 2
 - A short description for fixed item n
 
+## [v1.3.0] - 2025-09-13
+
+Minor code refactoring with some breaking changes and code examples.
+
+### Changed
+
+- Namespace `jsonic.StaticJson` to `jsonic.StaticJSON`
+- Namespace `jsonic.DynamicJson` to `jsonic.DynamicJSON`
+
 ## [v1.2.0] - 2025-09-13
 
 Minor code changes required for Zig v0.15.1 breaking changes.

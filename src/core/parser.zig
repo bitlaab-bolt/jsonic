@@ -1,15 +1,16 @@
 const std = @import("std");
-const Io = std.Io;
 const fmt = std.fmt;
 const json = std.json;
 const Parsed = json.Parsed;
 const Allocator = std.mem.Allocator;
 
 
+const Str = []const u8;
+
 pub const Static = struct {
     /// # Parses JSON String into a Given Structure
     /// **WARNING:** You must call `jsonic.free()` on parsed result.
-    pub fn parse(comptime T: type, heap: Allocator, data: []const u8) !T {
+    pub fn parse(comptime T: type, heap: Allocator, data: Str) !T {
         const parsed: Parsed(T) = try json.parseFromSlice(T, heap, data, .{});
         defer parsed.deinit();
 
@@ -19,13 +20,11 @@ pub const Static = struct {
     /// # Stringifies a Given Structure into JSON String
     /// **WARNING:** Return value must be freed by the caller.
     pub fn stringify(heap: Allocator, value: anytype) ![]u8 {
-        var out = Io.Writer.Allocating.init(heap);
+        var out = std.Io.Writer.Allocating.init(heap);
         errdefer out.deinit();
 
         var stringify_json = json.Stringify {
-            .writer = &out.writer, .options = .{
-                .whitespace = .minified
-            }
+            .writer = &out.writer, .options = .{.whitespace = .minified}
         };
 
         try stringify_json.write(value);
@@ -34,30 +33,29 @@ pub const Static = struct {
 };
 
 pub const Dynamic = struct {
+    const Value = json.Value;
     const Option = json.ParseOptions;
 
-    parsed: json.Parsed(json.Value),
+    parsed: json.Parsed(Value),
 
-    /// # Initializes Dynamic JSON
-    pub fn init(heap: Allocator, src: []const u8, opt: Option) !Dynamic {
-        const parsed = try json.parseFromSlice(json.Value, heap, src, opt);
+    /// # Initializes Dynamic JSON Data from a Given Source
+    pub fn init(heap: Allocator, src: Str, opt: Option) !Dynamic {
+        const parsed = try json.parseFromSlice(Value, heap, src, opt);
         return .{.parsed = parsed};
     }
 
-    /// # Destroys Dynamic JSON
+    /// # Destroys Dynamic JSON Data
     pub fn deinit(self: *Dynamic) void { self.parsed.deinit(); }
 
     /// # Returns Parsed JSON `Value`
-    pub fn data(self: *const Dynamic) json.Value {
-        return self.parsed.value;
-    }
+    pub fn data(self: *const Dynamic) Value { return self.parsed.value; }
 
     /// # Parses Dynamic JSON Value into a Given Structure
     /// **WARNING:** You must call `jsonic.free()` on parsed result.
     pub fn parseInto(
         comptime T: type,
         heap: Allocator,
-        src: json.Value,
+        src: Value,
         opt: Option
     ) !T {
         const parsed = try json.parseFromValue(T, heap, src, opt);
@@ -68,7 +66,7 @@ pub const Dynamic = struct {
 };
 
 /// # Frees the Parsed Result
-/// - `result` - Return value of the `parse()` and `parseInto()` functions call.
+/// - `result` - Return value of the `parse()` and `parseInto()`.
 pub fn free(heap: Allocator, result: anytype) !void {
     try deepFree(heap, result);
 }
@@ -113,10 +111,17 @@ fn deepCopy(heap: Allocator, src: anytype) !@TypeOf(src) {
 
 fn copyFieldValue(heap: Allocator, comptime T: type, value: T) !T {
     switch (@typeInfo(T)) {
-        .bool, .int, .@"enum" => return value,
+        .bool, .@"enum" => return value,
+        .int => |n| {
+            if (n.bits <= 53) return value
+            else {
+                const err_str = "jsonic: Unsupported Type `{s}`. Exceeds IEEE 754 double-precision floating-point boundary!";
+                @compileError(fmt.comptimePrint(err_str, .{@typeName(T)}));
+            }
+        },
         .float => |f| {
             if (f.bits == 64) return value
-            else @compileError("jsonic: Use `f64` Instead");
+            else @compileError("jsonic: Use only `f64` Instead");
         },
         .@"struct" => return try deepCopy(heap, value),
         .pointer => return try deepCopy(heap, value),
