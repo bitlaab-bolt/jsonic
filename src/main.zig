@@ -107,6 +107,40 @@ pub fn main() !void {
         std.debug.print("JSON Object - Hobby: {s}\n", .{hobby});
     }
 
+    // Dynamic JSON - Tagged Union
+    {
+        const User = struct { name: []const u8, level: u8 };
+        const Data = union(enum) { age: u8, user: User };
+
+        const age_str =
+        \\ {
+        \\      "age": 29
+        \\ }
+        ;
+        const age_input = try heap.alloc(u8, age_str.len);
+        std.mem.copyForwards(u8, age_input, age_str);
+        defer heap.free(age_input);
+
+        const age = try StaticJSON.parse(Data, heap, age_input);
+        defer jsonic.free(heap, age) catch unreachable;
+
+        std.debug.print("Tagged Age: {any}\n", .{age});
+
+        const user_str =
+        \\ {
+        \\      "user": { "name": "Jane Doe", "level": 5 }
+        \\ }
+        ;
+        const user_input = try heap.alloc(u8, user_str.len);
+        std.mem.copyForwards(u8, user_input, user_str);
+        defer heap.free(user_input);
+
+        const user = try StaticJSON.parse(Data, heap, user_input);
+        defer jsonic.free(heap, user) catch unreachable;
+
+        std.debug.print("Tagged User: {any}\n", .{user});
+    }
+
     // Dynamic JSON - Mixed
     {
         const Feelings = struct { fear: f64, joy: i32 };

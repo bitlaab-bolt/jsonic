@@ -82,6 +82,16 @@ fn deepCopy(heap: Allocator, src: anytype) !@TypeOf(src) {
                 @field(dest, field.name) = v;
             }
         },
+        .@"union" => {
+            const active_tag = std.meta.activeTag(src);
+            switch (active_tag) {
+                inline else => |tag| {
+                    const value = @field(src, @tagName(tag));
+                    const v = try copyFieldValue(heap, @TypeOf(value), value);
+                    dest = @unionInit(@TypeOf(src), @tagName(tag), v);
+                },
+            }
+        },
         .pointer => |p| {
             if (p.is_const and p.size == .slice) {
                 const slice = try heap.alloc(p.child, src.len);
@@ -123,7 +133,7 @@ fn copyFieldValue(heap: Allocator, comptime T: type, value: T) !T {
             if (f.bits == 64) return value
             else @compileError("jsonic: Use only `f64` Instead");
         },
-        .@"struct" => return try deepCopy(heap, value),
+        .@"struct", .@"union" => return try deepCopy(heap, value),
         .pointer => return try deepCopy(heap, value),
         .optional => |o| {
             if (value == null) return value
@@ -144,6 +154,15 @@ fn deepFree(heap: Allocator, src: anytype) !void {
                 try freeFieldValue(heap, @TypeOf(value), value);
             }
         },
+        .@"union" => {
+            const active_tag = std.meta.activeTag(src);
+            switch (active_tag) {
+                inline else => |tag| {
+                    const value = @field(src, @tagName(tag));
+                    try freeFieldValue(heap, @TypeOf(value), value);
+                }
+            }
+        },
         .pointer => {
             var i: usize = 0;
             while (i < src.len) : (i += 1) {
@@ -159,7 +178,7 @@ fn deepFree(heap: Allocator, src: anytype) !void {
 
 fn freeFieldValue(heap: Allocator, comptime T: type, value: T) !void {
     switch (@typeInfo(T)) {
-        .@"struct" => return try deepFree(heap, value),
+        .@"struct", .@"union" => return try deepFree(heap, value),
         .pointer => return try deepFree(heap, value),
         .optional => |o| {
             if (value != null) try freeFieldValue(heap, o.child, value.?);
