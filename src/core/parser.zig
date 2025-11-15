@@ -17,9 +17,32 @@ pub const Static = struct {
         return try deepCopy(heap, parsed.value);
     }
 
+    /// # Parses JSON String for Identifying Syntactic Error
+    /// **WARNING:** Return value must be freed by the caller.
+    pub fn diagnose(comptime T: type, heap: Allocator, data: Str) !?Str {
+        var diag = json.Diagnostics{};
+        var scanner = json.Scanner.initCompleteInput(heap, data);
+        defer scanner.deinit();
+        scanner.enableDiagnostics(&diag);
+
+        const tok_source = json.parseFromTokenSource(T, heap, &scanner, .{});
+        const parsed = tok_source catch |err| {
+            const byte_offset = diag.getByteOffset();
+            const start = if (byte_offset > 40) byte_offset - 40 else 0;
+            const end = @min(byte_offset + 40, data.len);
+
+            const ctx = data[start..end];
+            const fmt_str = "JSON error context: {s} - {s}";
+            return try fmt.allocPrint(heap, fmt_str, .{ctx, @errorName(err)});
+        };
+
+        parsed.deinit();
+        return null;
+    }
+
     /// # Stringifies a Given Structure into JSON String
     /// **WARNING:** Return value must be freed by the caller.
-    pub fn stringify(heap: Allocator, value: anytype) ![]u8 {
+    pub fn stringify(heap: Allocator, value: anytype) !Str {
         var out = std.Io.Writer.Allocating.init(heap);
         errdefer out.deinit();
 

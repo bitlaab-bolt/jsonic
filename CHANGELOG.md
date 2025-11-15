@@ -23,6 +23,14 @@ Here we write upgrading notes and make them as straightforward as possible.
 - A short description for fixed item n
 
 
+## [v1.5.0] - 2025-11-15
+
+New Feature
+
+### Added
+
+- `diagnose()` - For capturing syntactic error.
+
 ## [v1.4.0] - 2025-09-21
 
 Tagged union `T` support for `parse()` in StaticJSON and DynamicJSON.

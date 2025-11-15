@@ -38,6 +38,15 @@ std.debug.print(
     .{data.name, data.age}
 );
 
+const err_src = "{ \"name\": \"John Doe, \"age\": 40 }";
+const diag = try StaticJSON.diagnose(User, heap, err_src);
+if (diag) |ctx| {
+    std.debug.print("{s}\n", .{ctx});
+    heap.free(ctx);
+} else {
+    std.debug.print("Found 0 Error!\n", .{});
+}
+
 const json_str = try StaticJSON.stringify(heap, data);
 defer heap.free(json_str);
 
