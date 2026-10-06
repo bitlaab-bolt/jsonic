@@ -1,5 +1,5 @@
 //! # JSON Data Serializer and Deserializer
-//! - See documentation at - https://bitlaabjsonic.web.app/
+//! - See documentation at - https://bitlaab.com/api-doc?pkg=jsonic
 
 const parser = @import("./core/parser.zig");
 

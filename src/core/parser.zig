@@ -14,7 +14,7 @@ pub const Static = struct {
         const parsed: Parsed(T) = try json.parseFromSlice(T, heap, data, .{});
         defer parsed.deinit();
 
-        return try deepCopy(heap, parsed.value);
+        return try copyValue(heap, T, parsed.value);
     }
 
     /// # Parses JSON String for Identifying Syntactic Error
@@ -27,9 +27,15 @@ pub const Static = struct {
 
         const tok_source = json.parseFromTokenSource(T, heap, &scanner, .{});
         const parsed = tok_source catch |err| {
-            const byte_offset = diag.getByteOffset();
-            const start = if (byte_offset > 40) byte_offset - 40 else 0;
-            const end = @min(byte_offset + 40, data.len);
+            if (err == error.OutOfMemory) return err;
+
+            const byte_offset = @min(diag.getByteOffset(), data.len);
+            var start = if (byte_offset > 40) byte_offset - 40 else 0;
+            var end = @min(byte_offset + 40, data.len);
+
+            // Never split a UTF-8 sequence (skip continuation bytes).
+            while (start < end and isContinuation(data[start])) start += 1;
+            while (end < data.len and isContinuation(data[end])) end += 1;
 
             const ctx = data[start..end];
             const fmt_str = "JSON error context: {s} - {s}";
@@ -39,6 +45,8 @@ pub const Static = struct {
         parsed.deinit();
         return null;
     }
+
+    fn isContinuation(byte: u8) bool { return byte & 0xC0 == 0x80; }
 
     /// # Stringifies a Given Structure into JSON String
     /// **WARNING:** Return value must be freed by the caller.
@@ -71,6 +79,7 @@ pub const Dynamic = struct {
     pub fn deinit(self: *Dynamic) void { self.parsed.deinit(); }
 
     /// # Returns Parsed JSON `Value`
+    /// **Remarks:** Value is owned by `self` and dangles after `deinit()`.
     pub fn data(self: *const Dynamic) Value { return self.parsed.value; }
 
     /// # Parses Dynamic JSON Value into a Given Structure
@@ -84,128 +93,229 @@ pub const Dynamic = struct {
         const parsed = try json.parseFromValue(T, heap, src, opt);
         defer parsed.deinit();
 
-        return try deepCopy(heap, parsed.value);
+        return try copyValue(heap, T, parsed.value);
     }
 };
 
 /// # Frees the Parsed Result
+/// **Remarks:** NO-OP when `result` is *null**. 
+///
 /// - `result` - Return value of the `parse()` and `parseInto()`.
-pub fn free(heap: Allocator, result: anytype) !void {
-    try deepFree(heap, result);
-}
-
-fn deepCopy(heap: Allocator, src: anytype) !@TypeOf(src) {
-    var dest: @TypeOf(src) = undefined;
-
-    switch (@typeInfo(@TypeOf(src))) {
-        .@"struct" => |s| {
-            inline for (s.fields) |field| {
-                const value = @field(src, field.name);
-                const v = try copyFieldValue(heap, @TypeOf(value), value);
-                @field(dest, field.name) = v;
-            }
-        },
-        .@"union" => {
-            const active_tag = std.meta.activeTag(src);
-            switch (active_tag) {
-                inline else => |tag| {
-                    const value = @field(src, @tagName(tag));
-                    const v = try copyFieldValue(heap, @TypeOf(value), value);
-                    dest = @unionInit(@TypeOf(src), @tagName(tag), v);
-                },
-            }
-        },
-        .pointer => |p| {
-            if (p.is_const and p.size == .slice) {
-                const slice = try heap.alloc(p.child, src.len);
-
-                var i: usize = 0;
-                while (i < src.len) : (i += 1) {
-                    const value = src[i];
-                    slice[i] = try copyFieldValue(heap, @TypeOf(value), value);
-                }
-
-                dest = slice;
-            } else {
-                const t_name = @typeName(p.child);
-                const err_str = "jsonic: Use `[]const {s}` Instead";
-                @compileError(fmt.comptimePrint(err_str, .{t_name}));
-            }
-        },
-        else => {
-            const t_name = @typeName(@TypeOf(src));
-            const err_str = "Jsonic: Unsupported Type `{s}`";
-            @compileError(fmt.comptimePrint(err_str, .{t_name}));
-        }
-    }
-
-    return dest;
-}
-
-fn copyFieldValue(heap: Allocator, comptime T: type, value: T) !T {
+pub fn free(heap: Allocator, result: anytype) void {
+    const T = @TypeOf(result);
     switch (@typeInfo(T)) {
-        .bool, .@"enum" => return value,
+        .null => return,
+        .optional, .array, .pointer, .@"struct", .@"union" => freeValue(heap, T, result),
+        else => {
+            const err_str = "@jsonic: `{s}` owns no heap memory; do not pass it to `free()`";
+            @compileError(fmt.comptimePrint(err_str, .{@typeName(T)}));
+        },
+    }
+}
+
+fn isScalar(comptime T: type) bool {
+    return switch (@typeInfo(T)) {
+        .bool, .int, .float, .@"enum" => true, else => false
+    };
+}
+
+/// Integers are limited to 53 bits and floats to `f64`, so every value
+/// is exactly representable as an IEEE 754 double (JSON number model).
+fn checkScalar(comptime T: type) void {
+    switch (@typeInfo(T)) {
         .int => |n| {
-            if (n.bits <= 53) return value
-            else {
-                const err_str = "jsonic: Unsupported Type `{s}`. Exceeds IEEE 754 double-precision floating-point boundary!";
+            if (n.bits > 53) {
+                const err_str = "@jsonic: Unsupported type `{s}`. Exceeds IEEE 754 double-precision floating-point boundary!";
                 @compileError(fmt.comptimePrint(err_str, .{@typeName(T)}));
             }
         },
         .float => |f| {
-            if (f.bits == 64) return value
-            else @compileError("jsonic: Use only `f64` Instead");
+            if (f.bits != 64) @compileError("@jsonic: Use only `f64` instead!");
         },
-        .@"struct", .@"union" => return try deepCopy(heap, value),
-        .pointer => return try deepCopy(heap, value),
+        else => {} // NO-OP
+    }
+}
+
+fn copyValue(heap: Allocator, comptime T: type, value: T) Allocator.Error!T {
+    switch (@typeInfo(T)) {
+        .void, .null, .bool, .@"enum" => return value,
+        .int, .float => {
+            checkScalar(T);
+            return value;
+        },
         .optional => |o| {
-            if (value == null) return value
-            else return try copyFieldValue(heap, o.child, value.?);
+            if (value) |v| return try copyValue(heap, o.child, v)
+            else return null;
+        },
+        .array => |a| {
+            var dest: T = undefined;
+            for (value, 0..) |item, i| {
+                dest[i] = copyValue(heap, a.child, item) catch |err| {
+                    for (dest[0..i]) |d| freeValue(heap, a.child, d);
+                    return err;
+                };
+            }
+
+            return dest;
+        },
+        .pointer => |p| {
+            if (!p.attrs.@"const") {
+                const err_str = "@jsonic: Use `const` ptr for `{s}` instead";
+                @compileError(fmt.comptimePrint(err_str, .{@typeName(T)}));
+            }
+
+            if (p.sentinel() != null) {
+                const err_str = "@jsonic: Sentinel terminated `{s}` is unsupported";
+                @compileError(fmt.comptimePrint(err_str, .{@typeName(T)}));
+            }
+
+            switch (p.size) {
+                .slice => {
+                    if (comptime isScalar(p.child)) {
+                        comptime checkScalar(p.child);
+                        return try heap.dupe(p.child, value);
+                    }
+
+                    const slice = try heap.alloc(p.child, value.len);
+                    for (value, 0..) |item, i| {
+                        slice[i] = copyValue(heap, p.child, item) catch |err| {
+                            for (slice[0..i]) |d| freeValue(heap, p.child, d);
+                            heap.free(slice);
+                            return err;
+                        };
+                    }
+
+                    return slice;
+                },
+                .one => {
+                    const dest = try heap.create(p.child);
+                    dest.* = copyValue(heap, p.child, value.*) catch |err| {
+                        heap.destroy(dest);
+                        return err;
+                    };
+
+                    return dest;
+                },
+                else => {
+                    const err_str = "@jsonic: Unsupported pointer type `{s}`";
+                    @compileError(fmt.comptimePrint(err_str, .{@typeName(T)}));
+                }
+            }
+        },
+        .@"struct" => |s| {
+            var dest: T = undefined;
+            inline for (s.field_names, s.field_types, 0..) |name, FT, i| {
+                if (comptime s.field_attrs[i].@"comptime") continue;
+
+                const v = @field(value, name);
+                if (isDefault(T, i, v)) {
+                    @field(dest, name) = v;
+                } else {
+                    @field(dest, name) = copyValue(heap, FT, v) catch |err| {
+                        freeFields(heap, T, &dest, i);
+                        return err;
+                    };
+                }
+            }
+
+            return dest;
+        },
+        .@"union" => {
+            switch (value) {
+                inline else => |payload, tag| {
+                    const v = try copyValue(heap, @TypeOf(payload), payload);
+                    return @unionInit(T, @tagName(tag), v);
+                }
+            }
         },
         else => {
-            const err_str = "jsonic: Unsupported Field Type `{s}`";
+            const err_str = "jsonic: Unsupported type `{s}`";
             @compileError(fmt.comptimePrint(err_str, .{@typeName(T)}));
         }
     }
 }
 
-fn deepFree(heap: Allocator, src: anytype) !void {
-    switch (@typeInfo(@TypeOf(src))) {
-        .@"struct" => |s| {
-            inline for (s.fields) |field| {
-                const value = @field(src, field.name);
-                try freeFieldValue(heap, @TypeOf(value), value);
-            }
-        },
-        .@"union" => {
-            const active_tag = std.meta.activeTag(src);
-            switch (active_tag) {
-                inline else => |tag| {
-                    const value = @field(src, @tagName(tag));
-                    try freeFieldValue(heap, @TypeOf(value), value);
-                }
-            }
-        },
-        .pointer => {
-            var i: usize = 0;
-            while (i < src.len) : (i += 1) {
-                const value = src[i];
-                try freeFieldValue(heap, @TypeOf(value), value);
-            }
-
-            heap.free(src);
-        },
-        else => {} // NOP
+/// Frees only the first `n` fields of a partially initialized struct.
+fn freeFields(
+    heap: Allocator,
+    comptime T: type,
+    dest: *const T,
+    n: usize
+) void {
+    const s = @typeInfo(T).@"struct";
+    inline for (s.field_names, s.field_types, 0..) |name, FT, i| {
+        if (comptime s.field_attrs[i].@"comptime") continue;
+        if (i < n) {
+            const v = @field(dest.*, name);
+            if (!isDefault(T, i, v)) freeValue(heap, FT, v);
+        }
     }
 }
 
-fn freeFieldValue(heap: Allocator, comptime T: type, value: T) !void {
+fn isDefault(comptime T: type, comptime i: usize, value: anytype) bool {
+    const s = @typeInfo(T).@"struct";
+    const FT = s.field_types[i];
+    if (comptime s.field_attrs[i].defaultValue(FT)) |d| {
+        return aliasesDefault(FT, value, d);
+    }
+
+    return false;
+}
+
+fn aliasesDefault(comptime T: type, value: T, comptime default: T) bool {
     switch (@typeInfo(T)) {
-        .@"struct", .@"union" => return try deepFree(heap, value),
-        .pointer => return try deepFree(heap, value),
-        .optional => |o| {
-            if (value != null) try freeFieldValue(heap, o.child, value.?);
+        .pointer => |p| switch (p.size) {
+            .slice => return value.ptr == default.ptr and value.len == default.len,
+            .one => return value == default,
+            else => return false
         },
-        else => {} // NOP
+        .optional => |o| {
+            const d = default orelse return false;
+            const v = value orelse return false;
+            return aliasesDefault(o.child, v, d);
+        },
+        else => return false
+    }
+}
+
+fn freeValue(heap: Allocator, comptime T: type, value: T) void {
+    switch (@typeInfo(T)) {
+        .optional => |o| {
+            if (value) |v| freeValue(heap, o.child, v);
+        },
+        .array => |a| {
+            if (comptime isScalar(a.child)) return;
+            for (value) |item| freeValue(heap, a.child, item);
+        },
+        .pointer => |p| {
+            switch (p.size) {
+                .slice => {
+                    if (comptime !isScalar(p.child)) {
+                        for (value) |item| freeValue(heap, p.child, item);
+                    }
+
+                    heap.free(value);
+                },
+                .one => {
+                    freeValue(heap, p.child, value.*);
+                    heap.destroy(value);
+                },
+                else => {}
+            }
+        },
+        .@"struct" => |s| {
+            inline for (s.field_names, s.field_types, 0..) |name, FT, i| {
+                if (comptime s.field_attrs[i].@"comptime") continue;
+
+                const v = @field(value, name);
+                if (!isDefault(T, i, v)) freeValue(heap, FT, v);
+            }
+        },
+        .@"union" => {
+            switch (value) {
+                inline else => |payload| freeValue(heap, @TypeOf(payload), payload)
+            }
+        },
+        else => {} // NO-OP
     }
 }

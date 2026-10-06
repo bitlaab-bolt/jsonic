@@ -44,7 +44,7 @@ pub fn main() !void {
         std.debug.print(
             "Stringified JSON from Zig Structure - {s}\n", .{json_str}
         );
-        try jsonic.free(heap, data);
+        jsonic.free(heap, data);
     }
 
     // Dynamic JSON - Array
@@ -84,7 +84,7 @@ pub fn main() !void {
         defer heap.free(str);
 
         std.debug.print("Stringified Array Items:\n{s}\n", .{str});
-        try jsonic.free(heap, result);
+        jsonic.free(heap, result);
     }
 
     // Dynamic JSON - Object
@@ -131,7 +131,7 @@ pub fn main() !void {
         defer heap.free(age_input);
 
         const age = try StaticJSON.parse(Data, heap, age_input);
-        defer jsonic.free(heap, age) catch unreachable;
+        defer jsonic.free(heap, age);
 
         std.debug.print("Tagged Age: {any}\n", .{age});
 
@@ -145,7 +145,7 @@ pub fn main() !void {
         defer heap.free(user_input);
 
         const user = try StaticJSON.parse(Data, heap, user_input);
-        defer jsonic.free(heap, user) catch unreachable;
+        defer jsonic.free(heap, user);
 
         std.debug.print("Tagged User: {any}\n", .{user});
     }
@@ -190,6 +190,6 @@ pub fn main() !void {
         defer heap.free(str);
 
         std.debug.print("Stringified JSON Result {s}\n", .{str});
-        try jsonic.free(heap, result);
+        jsonic.free(heap, result);
     }
 }
