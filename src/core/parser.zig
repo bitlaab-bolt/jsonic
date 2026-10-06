@@ -98,7 +98,7 @@ pub const Dynamic = struct {
 };
 
 /// # Frees the Parsed Result
-/// **Remarks:** NO-OP when `result` is *null**. 
+/// **Remarks:** NO-OP when `result` is **null**.
 ///
 /// - `result` - Return value of the `parse()` and `parseInto()`.
 pub fn free(heap: Allocator, result: anytype) void {
@@ -136,10 +136,12 @@ fn checkScalar(comptime T: type) void {
     }
 }
 
+/// - Deep-copies `value` into `heap`.
+/// - On error, everything this call itself allocated is already released.
+/// - Caller only has to clean up successfully copied value on its own level.
 fn copyValue(heap: Allocator, comptime T: type, value: T) Allocator.Error!T {
     switch (@typeInfo(T)) {
-        .void, .null, .bool, .@"enum" => return value,
-        .int, .float => {
+        .void, .null, .bool, .@"enum", .int, .float => {
             checkScalar(T);
             return value;
         },
@@ -149,11 +151,12 @@ fn copyValue(heap: Allocator, comptime T: type, value: T) Allocator.Error!T {
         },
         .array => |a| {
             var dest: T = undefined;
+            var n: usize = 0;
+            errdefer for (dest[0..n]) |item| freeValue(heap, a.child, item);
+
             for (value, 0..) |item, i| {
-                dest[i] = copyValue(heap, a.child, item) catch |err| {
-                    for (dest[0..i]) |d| freeValue(heap, a.child, d);
-                    return err;
-                };
+                dest[i] = try copyValue(heap, a.child, item);
+                n = i + 1;
             }
 
             return dest;
@@ -177,23 +180,24 @@ fn copyValue(heap: Allocator, comptime T: type, value: T) Allocator.Error!T {
                     }
 
                     const slice = try heap.alloc(p.child, value.len);
+                    var n: usize = 0;
+                    errdefer {
+                        for (slice[0..n]) |item| freeValue(heap, p.child, item);
+                        heap.free(slice);
+                    }
+
                     for (value, 0..) |item, i| {
-                        slice[i] = copyValue(heap, p.child, item) catch |err| {
-                            for (slice[0..i]) |d| freeValue(heap, p.child, d);
-                            heap.free(slice);
-                            return err;
-                        };
+                        slice[i] = try copyValue(heap, p.child, item);
+                        n = i + 1;
                     }
 
                     return slice;
                 },
                 .one => {
                     const dest = try heap.create(p.child);
-                    dest.* = copyValue(heap, p.child, value.*) catch |err| {
-                        heap.destroy(dest);
-                        return err;
-                    };
+                    errdefer heap.destroy(dest);
 
+                    dest.* = try copyValue(heap, p.child, value.*);
                     return dest;
                 },
                 else => {
@@ -207,15 +211,10 @@ fn copyValue(heap: Allocator, comptime T: type, value: T) Allocator.Error!T {
             inline for (s.field_names, s.field_types, 0..) |name, FT, i| {
                 if (comptime s.field_attrs[i].@"comptime") continue;
 
-                const v = @field(value, name);
-                if (isDefault(T, i, v)) {
-                    @field(dest, name) = v;
-                } else {
-                    @field(dest, name) = copyValue(heap, FT, v) catch |err| {
-                        freeFields(heap, T, &dest, i);
-                        return err;
-                    };
-                }
+                @field(dest, name) = copyValue(heap, FT, @field(value, name)) catch |err| {
+                    freeFields(heap, T, &dest, i);
+                    return err;
+                };
             }
 
             return dest;
@@ -235,7 +234,8 @@ fn copyValue(heap: Allocator, comptime T: type, value: T) Allocator.Error!T {
     }
 }
 
-/// Frees only the first `n` fields of a partially initialized struct.
+/// - Frees the first `n` (decl index) fields of a partially initialized struct.
+/// - Other fields was deep-copied by `copyValue` so freeing them is safe.
 fn freeFields(
     heap: Allocator,
     comptime T: type,
@@ -245,36 +245,7 @@ fn freeFields(
     const s = @typeInfo(T).@"struct";
     inline for (s.field_names, s.field_types, 0..) |name, FT, i| {
         if (comptime s.field_attrs[i].@"comptime") continue;
-        if (i < n) {
-            const v = @field(dest.*, name);
-            if (!isDefault(T, i, v)) freeValue(heap, FT, v);
-        }
-    }
-}
-
-fn isDefault(comptime T: type, comptime i: usize, value: anytype) bool {
-    const s = @typeInfo(T).@"struct";
-    const FT = s.field_types[i];
-    if (comptime s.field_attrs[i].defaultValue(FT)) |d| {
-        return aliasesDefault(FT, value, d);
-    }
-
-    return false;
-}
-
-fn aliasesDefault(comptime T: type, value: T, comptime default: T) bool {
-    switch (@typeInfo(T)) {
-        .pointer => |p| switch (p.size) {
-            .slice => return value.ptr == default.ptr and value.len == default.len,
-            .one => return value == default,
-            else => return false
-        },
-        .optional => |o| {
-            const d = default orelse return false;
-            const v = value orelse return false;
-            return aliasesDefault(o.child, v, d);
-        },
-        else => return false
+        if (i < n) freeValue(heap, FT, @field(dest.*, name));
     }
 }
 
@@ -306,9 +277,7 @@ fn freeValue(heap: Allocator, comptime T: type, value: T) void {
         .@"struct" => |s| {
             inline for (s.field_names, s.field_types, 0..) |name, FT, i| {
                 if (comptime s.field_attrs[i].@"comptime") continue;
-
-                const v = @field(value, name);
-                if (!isDefault(T, i, v)) freeValue(heap, FT, v);
+                freeValue(heap, FT, @field(value, name));
             }
         },
         .@"union" => {
