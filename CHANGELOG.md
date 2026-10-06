@@ -23,9 +23,13 @@ Here we write upgrading notes and make them as straightforward as possible.
 - A short description for fixed item n
 
 
-## [v1.6.0] - 2026-10-05
+## [v1.6.0] - 2026-10-06
 
+Internal code refactoring, better documentation and Zig-0.17.0 version support. 
 
+### Changed
+
+- `jsonic.free()` no longer requires `try`, `catch`.
 
 ## [v1.5.0] - 2025-11-15
 

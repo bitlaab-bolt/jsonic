@@ -218,8 +218,5 @@ const is_null = dyn_json.data() == .null;
 
 ## Known Quirks
 
-- An **empty array of strings** (`"empty": []`) round-trips through
-  `stringify()` as an empty string (`""`), because `[]const u8` slices are
-  serialized as JSON strings rather than arrays.
 - Tagged unions print with byte arrays in `{any}` debug output; use
   `stringify()` for human-readable output.

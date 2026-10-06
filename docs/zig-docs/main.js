@@ -50,7 +50,6 @@
     const domSectTypes = document.getElementById("sectTypes");
     const domSectValues = document.getElementById("sectValues");
     const domSourceText = document.getElementById("sourceText");
-    const domSourceLineNumbers = document.getElementById("sourceLineNumbers");
     const domStatus = document.getElementById("status");
     const domTableFnErrors = document.getElementById("tableFnErrors");
     const domTldDocs = document.getElementById("tldDocs");
@@ -239,7 +238,6 @@
         href: location.hash,
       }]);
 
-      domSourceLineNumbers.innerHTML = declLineNumbersHtml(decl_index);
       domSourceText.innerHTML = declSourceHtml(decl_index);
 
       domSectSource.classList.remove("hidden");
@@ -391,7 +389,6 @@
       if (members.length !== 0 || fields.length !== 0) {
         renderNamespace(decl_index, members, fields);
       } else {
-        domSourceLineNumbers.innerHTML = declLineNumbersHtml(decl_index);
         domSourceText.innerHTML = declSourceHtml(decl_index);
         domSectSource.classList.remove("hidden");
       }
@@ -422,7 +419,6 @@
         renderErrorSet(base_decl, errorSetNodeList(decl_index, errorSetNode));
       }
 
-      domSourceLineNumbers.innerHTML = declLineNumbersHtml(decl_index);
       domSourceText.innerHTML = declSourceHtml(decl_index);
       domSectSource.classList.remove("hidden");
     }
@@ -437,7 +433,6 @@
         domTldDocs.classList.remove("hidden");
       }
 
-      domSourceLineNumbers.innerHTML = declLineNumbersHtml(decl_index);
       domSourceText.innerHTML = declSourceHtml(decl_index);
       domSectSource.classList.remove("hidden");
     }
@@ -697,7 +692,7 @@
     }
 
     function onSearchKeyDown(ev) {
-      switch (ev.key) {
+      switch (ev.code) {
         case "Enter":
           if (ev.shiftKey || ev.ctrlKey || ev.altKey) return;
 
@@ -763,7 +758,7 @@
     }
 
     function onWindowKeyDown(ev) {
-        switch (ev.key) {
+        switch (ev.code) {
             case "Escape":
                 if (ev.shiftKey || ev.ctrlKey || ev.altKey) return;
                 if (!domHelpModal.classList.contains("hidden")) {
@@ -772,22 +767,22 @@
                     ev.stopPropagation();
                 }
                 break;
-            case "s":
-                if (ev.ctrlKey || ev.altKey) return;
+            case "KeyS":
+                if (ev.shiftKey || ev.ctrlKey || ev.altKey) return;
                 domSearch.focus();
                 domSearch.select();
                 ev.preventDefault();
                 ev.stopPropagation();
                 startAsyncSearch();
                 break;
-            case "u":
-                if (ev.ctrlKey || ev.altKey) return;
+            case "KeyU":
+                if (ev.shiftKey || ev.ctrlKey || ev.altKey) return;
                 ev.preventDefault();
                 ev.stopPropagation();
                 navigateToSource();
                 break;
-            case "?":
-                if (ev.ctrlKey || ev.altKey) return;
+            case "Slash":
+                if (!ev.shiftKey || ev.ctrlKey || ev.altKey) return;
                 ev.preventDefault();
                 ev.stopPropagation();
                 showHelpModal();
@@ -921,10 +916,6 @@
 
     function declSourceHtml(decl_index) {
       return unwrapString(wasm_exports.decl_source_html(decl_index));
-    }
-
-    function declLineNumbersHtml(decl_index) {
-        return unwrapString(wasm_exports.decl_line_numbers_html(decl_index));
     }
 
     function declDoctestHtml(decl_index) {

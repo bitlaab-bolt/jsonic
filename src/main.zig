@@ -225,7 +225,7 @@ pub fn main() !void {
     {
         const Holder = struct {
             tags: ?[]const []const u8,
-            empty: []const u8,
+            empty: []const []const u8, // empty JSON array -> empty slice
         };
 
         const src = try slice(heap,
@@ -237,8 +237,8 @@ pub fn main() !void {
         defer jsonic.free(heap, holder);
 
         std.debug.print(
-            "Optional Slice - tags: {d}, first: {s}\n",
-            .{holder.tags.?.len, holder.tags.?[0]},
+            "Optional Slice - tags: {d}, first: {s}, empty len: {d}\n",
+            .{holder.tags.?.len, holder.tags.?[0], holder.empty.len},
         );
 
         const json_str = try StaticJSON.stringify(heap, holder);
