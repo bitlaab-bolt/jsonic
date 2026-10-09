@@ -1,7 +1,6 @@
 const std = @import("std");
 const fmt = std.fmt;
 const json = std.json;
-const Parsed = json.Parsed;
 const Allocator = std.mem.Allocator;
 
 
@@ -11,10 +10,13 @@ pub const Static = struct {
     /// # Parses JSON String into a Given Structure
     /// **WARNING:** You must call `jsonic.free()` on parsed result.
     pub fn parse(comptime T: type, heap: Allocator, data: Str) !T {
-        const parsed: Parsed(T) = try json.parseFromSlice(T, heap, data, .{});
-        defer parsed.deinit();
+        var arena = std.heap.ArenaAllocator.init(heap);
+        defer arena.deinit();
 
-        return try copyValue(heap, T, parsed.value);
+        const value = try json.parseFromSliceLeaky(
+            T, arena.allocator(), data, .{}
+        );
+        return try copyValue(heap, T, value);
     }
 
     /// # Parses JSON String for Identifying Syntactic Error
@@ -25,8 +27,14 @@ pub const Static = struct {
         defer scanner.deinit();
         scanner.enableDiagnostics(&diag);
 
-        const tok_source = json.parseFromTokenSource(T, heap, &scanner, .{});
-        const parsed = tok_source catch |err| {
+        var arena = std.heap.ArenaAllocator.init(heap);
+        defer arena.deinit();
+
+        if (json.parseFromTokenSourceLeaky(
+            T, arena.allocator(), &scanner, .{}
+        )) |_| {
+            return null;
+        } else |err| {
             if (err == error.OutOfMemory) return err;
 
             const byte_offset = @min(diag.getByteOffset(), data.len);
@@ -40,10 +48,7 @@ pub const Static = struct {
             const ctx = data[start..end];
             const fmt_str = "JSON error context: {s} - {s}";
             return try fmt.allocPrint(heap, fmt_str, .{ctx, @errorName(err)});
-        };
-
-        parsed.deinit();
-        return null;
+        }
     }
 
     fn isContinuation(byte: u8) bool { return byte & 0xC0 == 0x80; }
@@ -67,20 +72,26 @@ pub const Dynamic = struct {
     const Value = json.Value;
     const Option = json.ParseOptions;
 
-    parsed: json.Parsed(Value),
+    arena: std.heap.ArenaAllocator,
+    value: Value,
 
     /// # Initializes Dynamic JSON Data from a Given Source
     pub fn init(heap: Allocator, src: Str, opt: Option) !Dynamic {
-        const parsed = try json.parseFromSlice(Value, heap, src, opt);
-        return .{.parsed = parsed};
+        var arena = std.heap.ArenaAllocator.init(heap);
+        errdefer arena.deinit();
+
+        const value = try json.parseFromSliceLeaky(
+            Value, arena.allocator(), src, opt
+        );
+        return .{.arena = arena, .value = value};
     }
 
     /// # Destroys Dynamic JSON Data
-    pub fn deinit(self: *Dynamic) void { self.parsed.deinit(); }
+    pub fn deinit(self: *Dynamic) void { self.arena.deinit(); }
 
     /// # Returns Parsed JSON `Value`
     /// **Remarks:** Value is owned by `self` and dangles after `deinit()`.
-    pub fn data(self: *const Dynamic) Value { return self.parsed.value; }
+    pub fn data(self: *const Dynamic) Value { return self.value; }
 
     /// # Parses Dynamic JSON Value into a Given Structure
     /// **WARNING:** You must call `jsonic.free()` on parsed result.
@@ -90,10 +101,13 @@ pub const Dynamic = struct {
         src: Value,
         opt: Option
     ) !T {
-        const parsed = try json.parseFromValue(T, heap, src, opt);
-        defer parsed.deinit();
+        var arena = std.heap.ArenaAllocator.init(heap);
+        defer arena.deinit();
 
-        return try copyValue(heap, T, parsed.value);
+        const value = try json.parseFromValueLeaky(
+            T, arena.allocator(), src, opt
+        );
+        return try copyValue(heap, T, value);
     }
 };
 
@@ -150,6 +164,11 @@ fn copyValue(heap: Allocator, comptime T: type, value: T) Allocator.Error!T {
             else return null;
         },
         .array => |a| {
+            if (comptime isScalar(a.child)) {
+                comptime checkScalar(a.child);
+                return value;
+            }
+
             var dest: T = undefined;
             var n: usize = 0;
             errdefer for (dest[0..n]) |item| freeValue(heap, a.child, item);
